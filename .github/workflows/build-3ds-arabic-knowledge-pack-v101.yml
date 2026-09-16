@@ -1,0 +1,175 @@
+name: Build 3DS Arabic Knowledge Pack v1.0.1
+
+on:
+  push:
+    branches:
+      - trio-installer-build
+    paths:
+      - 'knowledge_pack/finalize_knowledge_pack_v101.py'
+      - '.github/workflows/build-3ds-arabic-knowledge-pack-v101.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-pack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate existing knowledge pack unchanged
+        shell: bash
+        run: |
+          cd knowledge_pack
+          python build_knowledge_pack.py
+          python addenda.py
+
+      - name: Validate existing reusable scripts
+        shell: bash
+        run: |
+          cd knowledge_pack
+          ROOT='dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          test -f "$ROOT/15_PROMPT_LIBRARY/01_NEW_SUPERVISOR_MASTER_PROMPT.txt"
+          test -f "$ROOT/15_PROMPT_LIBRARY/02_TRANSLATOR_MASTER_PROMPT.txt"
+          test -f "$ROOT/15_PROMPT_LIBRARY/03_BUILDER_MASTER_PROMPT.txt"
+          test -f "$ROOT/15_PROMPT_LIBRARY/04_RUNTIME_QA_MASTER_PROMPT.txt"
+          test -f "$ROOT/15_PROMPT_LIBRARY/05_NEW_GAME_DISCOVERY_PROMPT.txt"
+          test -f "$ROOT/14_FAILURE_CASES/FAILURE_PREVENTION_GUIDE.md"
+          test -f "$ROOT/16_PROJECT_BOOTSTRAP/TOOL_SCRIPT_MANIFEST.md"
+          test -f "$ROOT/16_PROJECT_BOOTSTRAP/ATTACHMENT_MANIFEST.md"
+          test -f "$ROOT/16_PROJECT_BOOTSTRAP/ROLE_ROUTING_MATRIX.md"
+          test -f "$ROOT/16_PROJECT_BOOTSTRAP/LOCAL_EXECUTION_PACKAGE_TEMPLATE.zip"
+          test -f "$ROOT/16_PROJECT_BOOTSTRAP/NEW_PROJECT_STARTER_TEMPLATE.zip"
+          find "$ROOT/12_SCRIPTS" -name '*.py' -print0 | xargs -0 -n1 python -m py_compile
+          python "$ROOT/12_SCRIPTS/rgba4_codec_reference.py"
+
+          cat > token_test.json <<'EOF'
+          [
+            {"id":"ok","source":"A <PAGE> <MOJI0>","translated":"مرحبا <PAGE> <MOJI0>"},
+            {"id":"bad","source":"A <PAGE>","translated":"مرحبا"}
+          ]
+          EOF
+          cat > token_policy.json <<'EOF'
+          {"movable_exact":["<MOJI0>"],"movable_prefixes":[]}
+          EOF
+          set +e
+          python "$ROOT/12_SCRIPTS/control_token_validator.py" token_test.json --policy token_policy.json -o token_test_report.json
+          rc=$?
+          set -e
+          test $rc -ne 0
+          python - <<'PY'
+          import json
+          r=json.load(open('token_test_report.json',encoding='utf-8'))
+          assert len(r['errors'])==1, r
+          print('token negative test PASS')
+          PY
+
+      - name: Preserve existing build report and addenda
+        shell: bash
+        run: |
+          cd knowledge_pack
+          ROOT='dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          cat > "$ROOT/PACK_BUILD_REPORT.txt" <<EOF
+          3DS Arabic Localization Knowledge Pack
+          ======================================
+          VERSION=1.0.1
+          GITHUB_SHA=${GITHUB_SHA}
+          GENERATOR=PASS
+          REQUIRED_DELIVERABLES=PASS
+          PYTHON_COMPILE=PASS
+          RGBA4_REFERENCE_SMOKE=PASS
+          TOKEN_VALIDATOR_NEGATIVE_TEST=PASS
+          LEGACY_TOOL_RECOVERY=PENDING_FINALIZE
+          REQUIREMENTS_LOCK=PENDING_FINALIZE
+          PYCACHE_REMOVAL=PENDING_FINALIZE
+          COPYRIGHTED_ROM_CONTENT_INCLUDED=NO
+          EOF
+          python addenda.py
+
+      - name: Resolve reproducible Python dependency lock
+        shell: bash
+        run: |
+          cd knowledge_pack
+          python -m venv .lockenv
+          . .lockenv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install \
+            'Pillow>=10,<12' \
+            'pypng>=0.20220715.0' \
+            'fonttools>=4.0' \
+            'numpy>=1.26' \
+            'arabic-reshaper==3.0.1' \
+            'python-bidi==0.6.11' \
+            'pyinstaller==6.15.0'
+          ROOT='dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          {
+            echo '# Reproducible Python dependency snapshot'
+            echo '# Generated in a clean Python 3.12 virtual environment during final Knowledge Pack review.'
+            echo '# Exact versions below are the resolved environment for reusable/reference Python tooling.'
+            python -m pip freeze
+          } > "$ROOT/requirements-lock.txt"
+          python --version > "$ROOT/PYTHON_RUNTIME.txt"
+          deactivate
+          rm -rf .lockenv
+
+      - name: Recover exact reviewed legacy tools and clean caches
+        shell: bash
+        run: |
+          cd knowledge_pack
+          python finalize_knowledge_pack_v101.py
+          ROOT='dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          test -f "$ROOT/13_REFERENCE_FILES/legacy_verified_tools/tool_xbb.py"
+          test -f "$ROOT/13_REFERENCE_FILES/legacy_verified_tools/repack_xbb.py"
+          test -f "$ROOT/13_REFERENCE_FILES/legacy_verified_tools/tool_font.py"
+          test -f "$ROOT/13_REFERENCE_FILES/legacy_verified_tools/tools/bffnt.py"
+          test -f "$ROOT/13_REFERENCE_FILES/legacy_verified_tools/LEGACY_VERIFIED_TOOLS_MANIFEST.json"
+          test -f "$ROOT/requirements-lock.txt"
+          if find "$ROOT" -type d -name '__pycache__' -print -quit | grep -q .; then
+            echo 'ERROR: __pycache__ remains in final pack'
+            exit 1
+          fi
+          if find "$ROOT" -type f -name '*.pyc' -print -quit | grep -q .; then
+            echo 'ERROR: .pyc remains in final pack'
+            exit 1
+          fi
+
+      - name: Final package
+        shell: bash
+        run: |
+          cd knowledge_pack
+          ROOT='dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK/PACK_BUILD_REPORT.txt')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('LEGACY_TOOL_RECOVERY=PENDING_FINALIZE','LEGACY_TOOL_RECOVERY=PASS')
+          s=s.replace('REQUIREMENTS_LOCK=PENDING_FINALIZE','REQUIREMENTS_LOCK=PASS')
+          s=s.replace('PYCACHE_REMOVAL=PENDING_FINALIZE','PYCACHE_REMOVAL=PASS')
+          p.write_text(s,encoding='utf-8')
+          PY
+          rm -f dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.1.zip
+          cd dist
+          zip -qr 3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.1.zip 3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK
+          sha256sum 3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.1.zip | tee KNOWLEDGE_PACK_V101_SHA256.txt
+          printf 'FILE_COUNT=' > KNOWLEDGE_PACK_V101_FILE_COUNT.txt
+          find 3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK -type f | wc -l >> KNOWLEDGE_PACK_V101_FILE_COUNT.txt
+          cat KNOWLEDGE_PACK_V101_FILE_COUNT.txt
+
+      - name: Upload final artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.1_FINAL
+          path: |
+            knowledge_pack/dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.1.zip
+            knowledge_pack/dist/KNOWLEDGE_PACK_V101_SHA256.txt
+            knowledge_pack/dist/KNOWLEDGE_PACK_V101_FILE_COUNT.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
