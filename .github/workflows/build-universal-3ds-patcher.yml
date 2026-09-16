@@ -71,7 +71,7 @@ jobs:
         working-directory: universal_3ds_patcher
         shell: pwsh
         run: |
-          python -c "import engine,tempfile,os; m=engine.inspect_patch(r'dist_patch\Story_of_Seasons_Trio_of_Towns_Arabic_Hesham.ah3p'); p=tempfile.mktemp(suffix='.3ds'); open(p,'wb').write(b'bad'); ok,msg=engine.validate_source(p,m); print('wrong-source rejected:',not ok,msg); os.remove(p); assert not ok"
+          python -c "import engine,tempfile,os; m=engine.inspect_patch(r'dist_patch\Story_of_Seasons_Trio_of_Towns_Arabic_Hesham.ah3p'); p=tempfile.mktemp(suffix='.3ds'); open(p,'wb').write(b'bad'); ok,msg=engine.validate_source(p,m); print('wrong-source rejected:',not ok); os.remove(p); assert not ok"
 
       - name: Generate icon
         working-directory: universal_3ds_patcher
