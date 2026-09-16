@@ -79,7 +79,10 @@ def main() -> int:
     lines += ["", "ALL PAYLOAD FILES", "-----------------"]
     for p in files:
         rel = p.relative_to(root).as_posix()
-        lines.append(f"{rel}\tsize={p.stat().st_size}\tsha256={sha256_file(p)}")
+        digest = sha256_file(p)
+        line = f"{rel}\tsize={p.stat().st_size}\tsha256={digest}"
+        lines.append(line)
+        print("PAYLOAD_FILE " + line)
 
     manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
