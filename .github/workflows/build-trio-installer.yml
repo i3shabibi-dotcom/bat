@@ -6,6 +6,7 @@ on:
       - trio-installer-build
     paths:
       - 'trio_installer/**'
+      - '.github/workflows/build-trio-installer.yml'
   workflow_dispatch:
 
 permissions:
@@ -53,6 +54,9 @@ jobs:
           New-Item -ItemType Directory -Path 'build_payload' -Force | Out-Null
           python prepare_payload.py 'payload_extract' 'build_payload\romfs.zip'
           if ($LASTEXITCODE -ne 0) { throw 'prepare_payload.py failed' }
+          Write-Host '===== PAYLOAD MANIFEST ====='
+          Get-Content 'build_payload\PAYLOAD_MANIFEST.txt'
+          Write-Host '===== END PAYLOAD MANIFEST ====='
 
       - name: Encrypt installer payload
         working-directory: trio_installer
@@ -133,6 +137,7 @@ jobs:
           path: |
             trio_installer/dist/Arabic_Hesham_Story_of_Seasons_Trio_of_Towns.exe
             trio_installer/dist/BUILD_REPORT.txt
+            trio_installer/build_payload/PAYLOAD_MANIFEST.txt
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
