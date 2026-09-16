@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_all
 
 
-datas = [('data', 'data'), ('tools', 'tools')]
+datas = [('data', 'data'), ('tools', 'tools'), ('THIRD_PARTY_NOTICES.txt', '.')]
 binaries = []
 hiddenimports = ['apply', 'loc_crypto']
 
