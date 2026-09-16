@@ -113,7 +113,7 @@ class App(tk.Tk):
         self.install_btn = tk.Button(card, text=rtl("تثبيت التعريب"), command=self.start_install,
                                      state="disabled", bg=AMBER, fg="#171717",
                                      activebackground="#ffbd37", activeforeground="#171717",
-                                     disabledforeground="#777777", disabledbackground="#4b4230",
+                                     disabledforeground="#777777",
                                      relief="flat", pady=10, font=("Segoe UI", 12, "bold"),
                                      cursor="hand2")
         self.install_btn.pack(fill="x", padx=22, pady=(0, 22))
