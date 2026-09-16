@@ -1,0 +1,138 @@
+name: Build Trio Arabic Installer
+
+on:
+  push:
+    branches:
+      - trio-installer-build
+    paths:
+      - 'trio_installer/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        working-directory: trio_installer
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller==6.15.0 pillow arabic-reshaper python-bidi
+          python -m py_compile gui.py apply.py loc_crypto.py build_payload.py prepare_payload.py make_icon.py
+
+      - name: Verify new RomFS payload is present
+        working-directory: trio_installer
+        shell: pwsh
+        run: |
+          if (!(Test-Path 'input\romfs.rar')) {
+            throw 'Missing trio_installer/input/romfs.rar - upload the NEW RomFS archive to this path.'
+          }
+          Get-FileHash 'input\romfs.rar' -Algorithm SHA256 | Format-List
+
+      - name: Extract and normalize RomFS payload
+        working-directory: trio_installer
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force 'payload_extract' -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path 'payload_extract' | Out-Null
+          & 7z x 'input\romfs.rar' '-opayload_extract' -y
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip failed to extract romfs.rar (exit $LASTEXITCODE)" }
+          New-Item -ItemType Directory -Path 'build_payload' -Force | Out-Null
+          python prepare_payload.py 'payload_extract' 'build_payload\romfs.zip'
+          if ($LASTEXITCODE -ne 0) { throw 'prepare_payload.py failed' }
+
+      - name: Encrypt installer payload
+        working-directory: trio_installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path 'data' -Force | Out-Null
+          Remove-Item 'data\patch.enc' -Force -ErrorAction SilentlyContinue
+          python build_payload.py 'build_payload\romfs.zip' 'data\patch.enc'
+          if ($LASTEXITCODE -ne 0) { throw 'build_payload.py failed' }
+          python -c "import io,zipfile,loc_crypto,build_payload; b=open(r'data\patch.enc','rb').read(); p=loc_crypto.decrypt(b,build_payload.key()); z=zipfile.ZipFile(io.BytesIO(p)); print('encrypted payload verified:',len(z.infolist()),'files'); assert len(z.infolist())>0"
+
+      - name: Download 3dstool
+        working-directory: trio_installer
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force 'tools' -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force '_3dstool_download' -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path '_3dstool_download' | Out-Null
+          Invoke-WebRequest -Uri 'https://github.com/dnasdw/3dstool/releases/download/v1.1.0/3dstool.zip' -OutFile '_3dstool_download\3dstool.zip'
+          Expand-Archive -Path '_3dstool_download\3dstool.zip' -DestinationPath '_3dstool_download\unzipped' -Force
+          $exe = Get-ChildItem '_3dstool_download\unzipped' -Recurse -Filter '3dstool.exe' | Select-Object -First 1
+          if (!$exe) { throw '3dstool.exe was not found in the official release archive' }
+          New-Item -ItemType Directory -Path 'tools' | Out-Null
+          Copy-Item (Join-Path $exe.Directory.FullName '*') 'tools' -Recurse -Force
+          if (!(Test-Path 'tools\3dstool.exe')) { throw 'Failed to stage tools\3dstool.exe' }
+          Get-FileHash 'tools\3dstool.exe' -Algorithm SHA256 | Format-List
+
+      - name: Generate branded icon
+        working-directory: trio_installer
+        shell: pwsh
+        run: |
+          python make_icon.py
+          if (!(Test-Path 'icon.ico')) { throw 'icon.ico was not generated' }
+
+      - name: Build standalone EXE
+        working-directory: trio_installer
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force 'dist' -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force 'build' -ErrorAction SilentlyContinue
+          python -m PyInstaller --noconfirm --clean 'Arabic_Hesham_Story_of_Seasons_Trio_of_Towns.spec'
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed' }
+
+      - name: Static verification
+        working-directory: trio_installer
+        shell: pwsh
+        run: |
+          $exe = 'dist\Arabic_Hesham_Story_of_Seasons_Trio_of_Towns.exe'
+          if (!(Test-Path $exe)) { throw 'Final EXE is missing' }
+          $item = Get-Item $exe
+          if ($item.Length -lt 1000000) { throw "Final EXE is unexpectedly small: $($item.Length) bytes" }
+          $bytes = [System.IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw 'Final EXE is not a valid PE/MZ file' }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $payloadHash = (Get-FileHash 'input\romfs.rar' -Algorithm SHA256).Hash.ToLower()
+          $encHash = (Get-FileHash 'data\patch.enc' -Algorithm SHA256).Hash.ToLower()
+          @(
+            'Arabic Hesham - Story of Seasons: Trio of Towns Installer Build',
+            '===============================================================',
+            '',
+            "EXE=$exe",
+            "EXE_SIZE=$($item.Length)",
+            "EXE_SHA256=$hash",
+            "ROMFS_RAR_SHA256=$payloadHash",
+            "PATCH_ENC_SHA256=$encHash",
+            "SOURCE_REQUIRED_SHA256=146cb1cc2d8c63cad81ced4e0a18b13672488dd52fd810501437e64934a1aab1",
+            "GITHUB_SHA=${{ github.sha }}",
+            '',
+            'STATIC_BUILD_VERIFICATION=PASS',
+            'RUNTIME_GAME_TEST=NOT_RUN_IN_CI'
+          ) | Set-Content -Encoding UTF8 'dist\BUILD_REPORT.txt'
+          Get-Content 'dist\BUILD_REPORT.txt'
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arabic_Hesham_Story_of_Seasons_Trio_of_Towns
+          path: |
+            trio_installer/dist/Arabic_Hesham_Story_of_Seasons_Trio_of_Towns.exe
+            trio_installer/dist/BUILD_REPORT.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
