@@ -1,0 +1,134 @@
+name: Build Universal 3DS Patcher
+
+on:
+  push:
+    branches:
+      - trio-installer-build
+    paths:
+      - 'universal_3ds_patcher/**'
+      - 'trio_installer/input/romfs.rar'
+      - '.github/workflows/build-universal-3ds-patcher.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        working-directory: universal_3ds_patcher
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller==6.15.0 pillow arabic-reshaper python-bidi
+          python -m py_compile gui.py engine.py make_patch.py make_icon.py
+
+      - name: Download bundled 3dstool
+        working-directory: universal_3ds_patcher
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force 'tools' -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force '_3dstool_download' -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path '_3dstool_download' | Out-Null
+          Invoke-WebRequest -Uri 'https://github.com/dnasdw/3dstool/releases/download/v1.1.0/3dstool.zip' -OutFile '_3dstool_download\3dstool.zip'
+          Expand-Archive -Path '_3dstool_download\3dstool.zip' -DestinationPath '_3dstool_download\unzipped' -Force
+          $exe = Get-ChildItem '_3dstool_download\unzipped' -Recurse -Filter '3dstool.exe' | Select-Object -First 1
+          if (!$exe) { throw '3dstool.exe was not found' }
+          New-Item -ItemType Directory -Path 'tools' | Out-Null
+          Copy-Item (Join-Path $exe.Directory.FullName '*') 'tools' -Recurse -Force
+          if (!(Test-Path 'tools\3dstool.exe')) { throw 'Failed to stage 3dstool.exe' }
+          Get-FileHash 'tools\3dstool.exe' -Algorithm SHA256 | Format-List
+
+      - name: Build Trio of Towns AH3P test patch
+        working-directory: universal_3ds_patcher
+        shell: pwsh
+        run: |
+          if (!(Test-Path '..\trio_installer\input\romfs.rar')) { throw 'Missing existing Trio Runtime10 romfs.rar' }
+          Remove-Item -Recurse -Force '_trio_patch' -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path '_trio_patch' | Out-Null
+          & 7z x '..\trio_installer\input\romfs.rar' '-o_trio_patch' -y
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to extract Trio romfs.rar' }
+          $root = '_trio_patch'
+          if (Test-Path '_trio_patch\romfs') { $root = '_trio_patch\romfs' }
+          New-Item -ItemType Directory -Path 'dist_patch' -Force | Out-Null
+          python make_patch.py $root 'dist_patch\Story_of_Seasons_Trio_of_Towns_Arabic_Hesham.ah3p' 'sos-tot-usa-ar-runtime10' 'Story of Seasons Trio of Towns - Arabic Hesham' 'Runtime10' 'STORY OF SEASONS: Trio of Towns (USA)' '1073741824' '146cb1cc2d8c63cad81ced4e0a18b13672488dd52fd810501437e64934a1aab1'
+          if ($LASTEXITCODE -ne 0) { throw 'make_patch.py failed' }
+          python -c "import engine; m=engine.inspect_patch(r'dist_patch\Story_of_Seasons_Trio_of_Towns_Arabic_Hesham.ah3p'); print('AH3P verified:',m['game_name'],m['file_count'],m['patch_sha256']); assert m['file_count']==71"
+
+      - name: Engine negative validation test
+        working-directory: universal_3ds_patcher
+        shell: pwsh
+        run: |
+          python -c "import engine,tempfile,os; m=engine.inspect_patch(r'dist_patch\Story_of_Seasons_Trio_of_Towns_Arabic_Hesham.ah3p'); p=tempfile.mktemp(suffix='.3ds'); open(p,'wb').write(b'bad'); ok,msg=engine.validate_source(p,m); print('wrong-source rejected:',not ok,msg); os.remove(p); assert not ok"
+
+      - name: Generate icon
+        working-directory: universal_3ds_patcher
+        shell: pwsh
+        run: |
+          python make_icon.py
+          if (!(Test-Path 'icon.ico')) { throw 'icon.ico was not generated' }
+
+      - name: Build standalone EXE
+        working-directory: universal_3ds_patcher
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force 'dist' -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force 'build' -ErrorAction SilentlyContinue
+          python -m PyInstaller --noconfirm --clean 'Arabic_Hesham_3DS_Patcher.spec'
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed' }
+
+      - name: Static verification and build report
+        working-directory: universal_3ds_patcher
+        shell: pwsh
+        run: |
+          $exe = 'dist\Arabic_Hesham_3DS_Patcher.exe'
+          $patch = 'dist_patch\Story_of_Seasons_Trio_of_Towns_Arabic_Hesham.ah3p'
+          if (!(Test-Path $exe)) { throw 'Final EXE is missing' }
+          if (!(Test-Path $patch)) { throw 'Final AH3P is missing' }
+          $bytes = [System.IO.File]::ReadAllBytes($exe)
+          if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { throw 'Final EXE is not PE/MZ' }
+          $exeItem = Get-Item $exe
+          if ($exeItem.Length -lt 1000000) { throw 'EXE unexpectedly small' }
+          $exeHash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $patchHash = (Get-FileHash $patch -Algorithm SHA256).Hash.ToLower()
+          @(
+            'Arabic Hesham Universal 3DS Patcher Build',
+            '==========================================',
+            '',
+            "EXE_SIZE=$($exeItem.Length)",
+            "EXE_SHA256=$exeHash",
+            "TRIO_AH3P_SHA256=$patchHash",
+            "GITHUB_SHA=${{ github.sha }}",
+            '',
+            'PATCH_FORMAT=AH3P v1',
+            'PATCH_INSPECTION_TEST=PASS',
+            'WRONG_SOURCE_REJECTION_TEST=PASS',
+            'STATIC_BUILD_VERIFICATION=PASS',
+            'FULL_ROM_RUNTIME_TEST=NOT_RUN_IN_CI'
+          ) | Set-Content -Encoding UTF8 'BUILD_REPORT.txt'
+          Get-Content 'BUILD_REPORT.txt'
+
+      - name: Upload universal patcher artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arabic_Hesham_Universal_3DS_Patcher
+          path: |
+            universal_3ds_patcher/dist/Arabic_Hesham_3DS_Patcher.exe
+            universal_3ds_patcher/dist_patch/Story_of_Seasons_Trio_of_Towns_Arabic_Hesham.ah3p
+            universal_3ds_patcher/README.txt
+            universal_3ds_patcher/BUILD_REPORT.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
