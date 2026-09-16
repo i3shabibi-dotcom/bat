@@ -1,0 +1,157 @@
+name: Build 3DS Arabic Localization Knowledge Pack
+
+on:
+  push:
+    branches:
+      - trio-installer-build
+    paths:
+      - 'knowledge_pack/**'
+      - '.github/workflows/build-3ds-arabic-knowledge-pack.yml'
+      - 'universal_3ds_patcher/**'
+      - 'trio_installer/*.py'
+      - '.github/workflows/build-trio-installer.yml'
+      - '.github/workflows/build-universal-3ds-patcher.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-pack:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout final project branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate knowledge pack
+        working-directory: knowledge_pack
+        shell: pwsh
+        run: |
+          python build_knowledge_pack.py
+          if ($LASTEXITCODE -ne 0) { throw 'Knowledge pack generator failed' }
+          python addenda.py
+          if ($LASTEXITCODE -ne 0) { throw 'Knowledge pack addenda failed' }
+
+      - name: Validate required deliverables
+        working-directory: knowledge_pack
+        shell: pwsh
+        run: |
+          $root = 'dist\3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          $required = @(
+            'README.md',
+            '15_PROMPT_LIBRARY\01_NEW_SUPERVISOR_MASTER_PROMPT.txt',
+            '15_PROMPT_LIBRARY\02_TRANSLATOR_MASTER_PROMPT.txt',
+            '15_PROMPT_LIBRARY\03_BUILDER_MASTER_PROMPT.txt',
+            '15_PROMPT_LIBRARY\04_RUNTIME_QA_MASTER_PROMPT.txt',
+            '15_PROMPT_LIBRARY\05_NEW_GAME_DISCOVERY_PROMPT.txt',
+            '14_FAILURE_CASES\FAILURE_PREVENTION_GUIDE.md',
+            '16_PROJECT_BOOTSTRAP\TOOL_SCRIPT_MANIFEST.md',
+            '16_PROJECT_BOOTSTRAP\ATTACHMENT_MANIFEST.md',
+            '16_PROJECT_BOOTSTRAP\ROLE_ROUTING_MATRIX.md',
+            '16_PROJECT_BOOTSTRAP\LOCAL_EXECUTION_PACKAGE_TEMPLATE.zip',
+            '16_PROJECT_BOOTSTRAP\NEW_PROJECT_STARTER_TEMPLATE.zip',
+            '12_SCRIPTS\control_token_validator.py',
+            '12_SCRIPTS\arabic_text_transform.py',
+            '13_REFERENCE_FILES\final_repo_sources\universal_3ds_patcher\engine.py',
+            '13_REFERENCE_FILES\final_repo_sources\universal_3ds_patcher\make_patch.py',
+            '13_REFERENCE_FILES\final_repo_sources\completed_game_installer\apply.py',
+            '10_VALIDATION\KNOWN_GOOD_BASELINE.csv'
+          )
+          foreach ($rel in $required) {
+            $p = Join-Path $root $rel
+            if (!(Test-Path $p)) { throw "Missing required deliverable: $rel" }
+          }
+          Write-Host "Required deliverables: PASS ($($required.Count))"
+
+      - name: Compile reusable Python scripts
+        working-directory: knowledge_pack
+        shell: pwsh
+        run: |
+          $scripts = Get-ChildItem 'dist\3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK\12_SCRIPTS' -Filter '*.py' -File
+          foreach ($s in $scripts) {
+            python -m py_compile $s.FullName
+            if ($LASTEXITCODE -ne 0) { throw "py_compile failed: $($s.Name)" }
+          }
+          Write-Host "Python compile tests: PASS ($($scripts.Count))"
+
+      - name: Run reference smoke tests
+        working-directory: knowledge_pack
+        shell: pwsh
+        run: |
+          $root = 'dist\3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          python "$root\12_SCRIPTS\rgba4_codec_reference.py"
+          if ($LASTEXITCODE -ne 0) { throw 'RGBA4 reference smoke test failed' }
+
+          @'
+          [
+            {"id":"ok","source":"A <PAGE> <MOJI0>","translated":"مرحبا <PAGE> <MOJI0>"},
+            {"id":"bad","source":"A <PAGE>","translated":"مرحبا"}
+          ]
+          '@ | Set-Content -Encoding utf8 'token_test.json'
+          @'
+          {"movable_exact":["<MOJI0>"],"movable_prefixes":[]}
+          '@ | Set-Content -Encoding utf8 'token_policy.json'
+          python "$root\12_SCRIPTS\control_token_validator.py" token_test.json --policy token_policy.json -o token_test_report.json
+          if ($LASTEXITCODE -eq 0) { throw 'Token validator negative test unexpectedly passed' }
+          $r = Get-Content token_test_report.json -Raw | ConvertFrom-Json
+          if ($r.errors.Count -ne 1) { throw "Token validator expected 1 error, got $($r.errors.Count)" }
+          Write-Host 'Token validator negative test: PASS'
+
+      - name: Write build report and refresh manifest
+        working-directory: knowledge_pack
+        shell: pwsh
+        run: |
+          $root = 'dist\3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          $fileCount = (Get-ChildItem $root -Recurse -File).Count
+          @(
+            '3DS Arabic Localization Knowledge Pack',
+            '======================================',
+            '',
+            "VERSION=1.0.0",
+            "GITHUB_SHA=${{ github.sha }}",
+            "FILE_COUNT_BEFORE_REPORT=$fileCount",
+            'GENERATOR=PASS',
+            'REQUIRED_DELIVERABLES=PASS',
+            'PYTHON_COMPILE=PASS',
+            'RGBA4_REFERENCE_SMOKE=PASS',
+            'TOKEN_VALIDATOR_NEGATIVE_TEST=PASS',
+            'COPYRIGHTED_ROM_CONTENT_INCLUDED=NO',
+            'RUNTIME_GAME_TEST=NOT_APPLICABLE_TO_KNOWLEDGE_PACK'
+          ) | Set-Content -Encoding utf8 "$root\PACK_BUILD_REPORT.txt"
+          python addenda.py
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to refresh pack manifest' }
+
+      - name: Package ZIP
+        working-directory: knowledge_pack
+        shell: pwsh
+        run: |
+          $root = Resolve-Path 'dist\3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK'
+          $zip = Join-Path (Resolve-Path 'dist') '3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.0.zip'
+          Remove-Item $zip -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path (Join-Path $root '*') -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          $size = (Get-Item $zip).Length
+          @(
+            "ZIP=$zip",
+            "SIZE=$size",
+            "SHA256=$hash"
+          ) | Set-Content -Encoding utf8 'dist\KNOWLEDGE_PACK_SHA256.txt'
+          Get-Content 'dist\KNOWLEDGE_PACK_SHA256.txt'
+
+      - name: Upload knowledge pack artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.0
+          path: |
+            knowledge_pack/dist/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.0.zip
+            knowledge_pack/dist/KNOWLEDGE_PACK_SHA256.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
