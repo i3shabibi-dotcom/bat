@@ -4,6 +4,10 @@
 The installer never modifies the selected source ROM. It validates the exact
 known USA source, rebuilds only partition 0 with the bundled RomFS overlay,
 and carries original partitions 1/6/7 through unchanged.
+
+For Azahar, the same verified RomFS overlay is also installed into LayeredFS
+when a standard Azahar user directory is detected. This prevents an installed
+update layer from hiding localized files in the rebuilt base image.
 """
 import hashlib
 import io
@@ -18,11 +22,14 @@ import zipfile
 import loc_crypto
 
 GAME_NAME = "STORY OF SEASONS: Trio of Towns"
+TITLE_ID = "000400000019F500"
+UPDATE_TITLE_ID = "0004000E0019F500"
 SOURCE_SIZE = 1_073_741_824
 SOURCE_SHA256 = "146cb1cc2d8c63cad81ced4e0a18b13672488dd52fd810501437e64934a1aab1"
 PROGRESS_CB = None
 LAST_OUTPUT = None
 LAST_OUTPUT_SHA256 = None
+LAST_AZAHAR_MOD_PATH = None
 
 
 def _key() -> bytes:
@@ -38,6 +45,14 @@ def resource_path(rel: str) -> str:
 def _report(name: str, pct: int) -> None:
     if PROGRESS_CB:
         PROGRESS_CB(name, max(0, min(100, int(pct))))
+
+
+def _append_log(log_path: str, text: str) -> None:
+    try:
+        with open(log_path, "a", encoding="utf-8", errors="replace") as log:
+            log.write(text.rstrip() + "\n")
+    except OSError:
+        pass
 
 
 def _sha256(path: str, cb=None) -> str:
@@ -81,7 +96,6 @@ def validate_source(path: str):
 
 
 def find_game():
-    # A ROM image is selected explicitly by the user; never guess a file.
     return None
 
 
@@ -123,24 +137,32 @@ def _payload_root(extracted: str) -> str:
     return str(root)
 
 
+def _payload_files(root: str):
+    r = Path(root)
+    return sorted(
+        (p for p in r.rglob("*") if p.is_file()),
+        key=lambda p: p.relative_to(r).as_posix().lower(),
+    )
+
+
 def _validate_payload(root: str) -> None:
     r = Path(root)
-    anchors = [
+    required = [
         r / "Msg.xbb",
         r / "DataText.xbb",
         r / "Font" / "mainfont.bffnt",
+        r / "Font" / "subfont.bffnt",
         r / "Layout" / "ListSelect.arc",
     ]
-    if not any(p.is_file() for p in anchors):
-        raise RuntimeError(
-            "حزمة RomFS لا تحتوي أي ملف تعريب متوقع (Msg.xbb / DataText.xbb / Font / Layout)."
-        )
+    missing = [str(p.relative_to(r)) for p in required if not p.is_file()]
+    if missing:
+        raise RuntimeError("حزمة RomFS ناقصة. الملفات المفقودة:\n" + "\n".join(missing))
 
 
 def _overlay_tree(src: str, dst: str, start_pct=43, end_pct=56) -> int:
     src_root = Path(src)
     dst_root = Path(dst)
-    files = [p for p in src_root.rglob("*") if p.is_file()]
+    files = _payload_files(src)
     total = max(1, len(files))
     for i, p in enumerate(files, 1):
         rel = p.relative_to(src_root)
@@ -148,7 +170,33 @@ def _overlay_tree(src: str, dst: str, start_pct=43, end_pct=56) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(p, out)
         pct = start_pct + (end_pct - start_pct) * i / total
-        _report("دمج ملفات التعريب: " + str(rel), pct)
+        _report("دمج ملفات التعريب: " + rel.as_posix(), pct)
+    return len(files)
+
+
+def _verify_overlay_files(payload_root: str, romfs_root: str, log_path: str) -> int:
+    src_root = Path(payload_root)
+    dst_root = Path(romfs_root)
+    files = _payload_files(payload_root)
+    failures = []
+    for p in files:
+        rel = p.relative_to(src_root)
+        out = dst_root / rel
+        if not out.is_file():
+            failures.append(rel.as_posix() + " [MISSING]")
+            continue
+        src_hash = _sha256(str(p))
+        dst_hash = _sha256(str(out))
+        if src_hash != dst_hash:
+            failures.append(rel.as_posix() + " [HASH MISMATCH]")
+    _append_log(log_path, f"Per-file RomFS verification: {len(files) - len(failures)}/{len(files)} matched")
+    if failures:
+        for item in failures:
+            _append_log(log_path, "VERIFY_FAIL " + item)
+        raise RuntimeError(
+            "فشل التحقق من ملفات التعريب داخل ROM الناتج.\n\n" +
+            "\n".join(failures[:20])
+        )
     return len(files)
 
 
@@ -201,10 +249,86 @@ def _check_ncsd(path: str) -> None:
             raise RuntimeError("ملف 3DS الناتج لا يحتوي ترويسة NCSD صحيحة.")
 
 
+def _azahar_user_candidates():
+    candidates = []
+    explicit = os.environ.get("AZAHAR_USER_DIR")
+    if explicit:
+        candidates.append(Path(explicit))
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        candidates.append(Path(appdata) / "Azahar")
+        candidates.append(Path(appdata) / "azahar-emu")
+    local = os.environ.get("LOCALAPPDATA")
+    if local:
+        candidates.append(Path(local) / "Azahar")
+        candidates.append(Path(local) / "azahar-emu")
+    unique = []
+    seen = set()
+    for p in candidates:
+        key = str(p).lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(p)
+    return unique
+
+
+def _has_azahar_markers(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    markers = ["nand", "sdmc", "load", "config"]
+    return any((path / name).exists() for name in markers)
+
+
+def _detect_separate_update(user_dir: Path) -> bool:
+    nand = user_dir / "nand"
+    if not nand.is_dir():
+        return False
+    update_high = UPDATE_TITLE_ID[:8].lower()
+    update_low = UPDATE_TITLE_ID[8:].lower()
+    try:
+        for high in nand.rglob(update_high):
+            if high.is_dir() and (high / update_low).is_dir():
+                return True
+    except OSError:
+        return False
+    return False
+
+
+def _install_azahar_layeredfs(payload_root: str, log_path: str):
+    """Install verified overlay into detected Azahar user folders.
+
+    Returns the first installed mod path or None. Failure here never destroys
+    the rebuilt ROM; errors are logged and the standalone ROM remains valid.
+    """
+    src_root = Path(payload_root)
+    installed = []
+    for user_dir in _azahar_user_candidates():
+        if not _has_azahar_markers(user_dir):
+            continue
+        mod_romfs = user_dir / "load" / "mods" / TITLE_ID / "romfs"
+        try:
+            mod_romfs.mkdir(parents=True, exist_ok=True)
+            for src in _payload_files(payload_root):
+                rel = src.relative_to(src_root)
+                dst = mod_romfs / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                if _sha256(str(src)) != _sha256(str(dst)):
+                    raise RuntimeError("Azahar LayeredFS hash mismatch: " + rel.as_posix())
+            installed.append(str(mod_romfs))
+            update_state = "YES" if _detect_separate_update(user_dir) else "NO/NOT-DETECTED"
+            _append_log(log_path, "Azahar LayeredFS installed: " + str(mod_romfs))
+            _append_log(log_path, "Azahar separate update detected: " + update_state)
+        except Exception as exc:
+            _append_log(log_path, "Azahar LayeredFS warning: " + repr(exc))
+    return installed[0] if installed else None
+
+
 def main(game_path=None):
-    global LAST_OUTPUT, LAST_OUTPUT_SHA256
+    global LAST_OUTPUT, LAST_OUTPUT_SHA256, LAST_AZAHAR_MOD_PATH
     LAST_OUTPUT = None
     LAST_OUTPUT_SHA256 = None
+    LAST_AZAHAR_MOD_PATH = None
 
     if os.name != "nt":
         raise RuntimeError("هذا المثبت مخصص لنظام Windows.")
@@ -244,6 +368,7 @@ def main(game_path=None):
         _safe_extract_zip(payload_zip, patch_extract)
         patch_root = _payload_root(patch_extract)
         _validate_payload(patch_root)
+        _append_log(log_path, "Payload file count: %d" % len(_payload_files(patch_root)))
 
         ncsd_header = os.path.join(work, "ncsd_header.bin")
         p0 = os.path.join(work, "partition0.cxi")
@@ -318,6 +443,13 @@ def main(game_path=None):
         if _sha256(custom_romfs) != _sha256(verify_romfs):
             raise RuntimeError("فشل التحقق النهائي: RomFS داخل الملف الناتج لا يطابق RomFS المبني.")
 
+        verify_romfs_dir = os.path.join(work, "verify_romfs_dir")
+        os.makedirs(verify_romfs_dir, exist_ok=True)
+        _run([tool, "-xtf", "romfs", verify_romfs, "--romfs-dir", verify_romfs_dir],
+             work, log_path, "التحقق من كل ملفات التعريب", 89)
+        verified_count = _verify_overlay_files(patch_root, verify_romfs_dir, log_path)
+        _append_log(log_path, "Verified localized files in final ROM: %d" % verified_count)
+
         _report("التأكد من بقاء الملف الأصلي دون تعديل", 91)
         if _sha256(source) != SOURCE_SHA256:
             raise RuntimeError("تغير الملف الأصلي أثناء العملية؛ تم إيقاف التثبيت لحمايته.")
@@ -325,8 +457,15 @@ def main(game_path=None):
         _report("حفظ النسخة العربية", 94)
         shutil.move(partial_output, final_output)
         LAST_OUTPUT = final_output
-        LAST_OUTPUT_SHA256 = _sha256(final_output, lambda d, t: _report("حساب SHA-256 للناتج", 95 + 4 * d / t))
+        LAST_OUTPUT_SHA256 = _sha256(
+            final_output,
+            lambda d, t: _report("حساب SHA-256 للناتج", 95 + 3 * d / t),
+        )
+
+        _report("تطبيق توافق Azahar", 99)
+        LAST_AZAHAR_MOD_PATH = _install_azahar_layeredfs(patch_root, log_path)
         _report("اكتمل", 100)
+
         try:
             if os.path.exists(error_log):
                 os.remove(error_log)
