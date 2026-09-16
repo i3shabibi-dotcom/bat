@@ -1,0 +1,8 @@
+Place the current Trio of Towns Arabic RomFS payload here with the exact name:
+
+romfs.rar
+
+Target path:
+trio_installer/input/romfs.rar
+
+After commit/push on branch trio-installer-build, GitHub Actions builds the standalone Windows installer automatically.
