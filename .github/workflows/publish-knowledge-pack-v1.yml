@@ -1,0 +1,43 @@
+name: Publish Knowledge Pack v1.0.0
+
+on:
+  push:
+    branches:
+      - trio-installer-build
+    paths:
+      - '.github/workflows/publish-knowledge-pack-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified artifact from prior successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work
+          gh api repos/${{ github.repository }}/actions/artifacts/10469955748/zip > work/artifact.zip
+          unzip -q work/artifact.zip -d work/artifact
+          test -f work/artifact/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.0.zip
+
+      - name: Verify exact final package SHA-256
+        run: |
+          echo 'e21694a700e0bc78f6feff9c53ddb815eb2197bbe8d6d3b033d79f778390bc50  work/artifact/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.0.zip' | sha256sum -c -
+
+      - name: Publish exact verified ZIP as release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view knowledge-pack-v1.0.0 >/dev/null 2>&1; then
+            gh release upload knowledge-pack-v1.0.0 work/artifact/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.0.zip --clobber
+          else
+            gh release create knowledge-pack-v1.0.0 \
+              work/artifact/3DS_ARABIC_LOCALIZATION_KNOWLEDGE_PACK_v1.0.0.zip \
+              --title '3DS Arabic Localization Knowledge Pack v1.0.0' \
+              --notes 'Verified final knowledge-transfer package. SHA-256: e21694a700e0bc78f6feff9c53ddb815eb2197bbe8d6d3b033d79f778390bc50'
+          fi
