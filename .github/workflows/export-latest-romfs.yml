@@ -1,0 +1,27 @@
+name: Export latest RomFS
+
+on:
+  push:
+    branches: [trio-installer-build]
+    paths:
+      - '.github/workflows/export-latest-romfs.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify RomFS payload
+        shell: bash
+        run: |
+          test -f trio_installer/input/romfs.rar
+          sha256sum trio_installer/input/romfs.rar | tee ROMFS_SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: latest-romfs
+          path: |
+            trio_installer/input/romfs.rar
+            ROMFS_SHA256.txt
+          if-no-files-found: error
+          compression-level: 0
