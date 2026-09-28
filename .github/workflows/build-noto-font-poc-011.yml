@@ -3,10 +3,11 @@ name: Build Noto Arabic Font PoC 011
 on:
   workflow_dispatch:
   push:
-    branches: [trio-installer-build]
+    branches:
+      - trio-installer-build
     paths:
-      - 'noto_font_poc/**'
-      - '.github/workflows/build-noto-font-poc-011.yml'
+      - noto_font_poc/**
+      - .github/workflows/build-noto-font-poc-011.yml
 
 jobs:
   build:
@@ -20,137 +21,42 @@ jobs:
           python-version: '3.12'
 
       - name: Install system tools
-        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full libfreetype6
 
       - name: Install Python dependencies
-        shell: bash
         run: |
           python -m pip install --upgrade pip
-          python -m pip install \
-            Pillow==11.3.0 \
-            pypng==0.20220715.0 \
-            fonttools==4.65.0 \
-            numpy==2.5.3 \
-            uharfbuzz==0.52.0 \
-            freetype-py==2.5.1 \
-            arabic-reshaper==3.0.1 \
-            python-bidi==0.6.11
+          python -m pip install Pillow==11.3.0 pypng==0.20220715.0 fonttools==4.65.0 numpy==2.5.3 uharfbuzz==0.52.0 freetype-py==2.5.1 arabic-reshaper==3.0.1 python-bidi==0.6.11
 
-      - name: Prepare reviewed BFFNT tool with verified round-trip fixes
-        shell: bash
+      - name: Prepare reviewed BFFNT tool
         run: |
           mkdir -p noto_font_poc/vendor
-          curl -L --fail --retry 3 \
-            'https://raw.githubusercontent.com/mirusu400/Story-of-seasons-Trio-of-Towns-Fan-Translation/66e01a9f78474bbf0cdb41aeb1605725e68e90ff/tools/bffnt.py' \
-            -o noto_font_poc/vendor/bffnt.py
-          echo 'UPSTREAM:'
+          curl -L --fail --retry 3 https://raw.githubusercontent.com/mirusu400/Story-of-seasons-Trio-of-Towns-Fan-Translation/66e01a9f78474bbf0cdb41aeb1605725e68e90ff/tools/bffnt.py -o noto_font_poc/vendor/bffnt.py
           sha256sum noto_font_poc/vendor/bffnt.py
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('noto_font_poc/vendor/bffnt.py')
-          s = p.read_text(encoding='utf-8')
-
-          # 1) _parse_tglp_header parsed max_char_width but did not retain it,
-          # while save() requires tglp['maxCharWidth'].
-          old = "        self.tglp = {\n            'size': section_size,\n            'glyph': {"
-          new = "        self.tglp = {\n            'size': section_size,\n            'maxCharWidth': max_char_width,\n            'glyph': {"
-          if old not in s:
-              raise SystemExit('Expected TGLP parser block not found')
-          s = s.replace(old, new, 1)
-
-          # 2) save() incorrectly wrote a scan-entry count before EVERY CMAP.
-          # Parser proves DIRECT data = uint16 indexOffset, TABLE data = uint16 table[],
-          # SCAN data = uint16 count + (uint16 code,uint16 index) pairs.
-          old = '''            file_.write(struct.pack('%sH' % self.order, len(cmap['entries'])))
-            position += 2
-
-            if cmap['type'] == MAPPING_DIRECT:
-                file_.write(struct.pack('%sH' % self.order, cmap['indexOffset']))
-                position += 2
-            elif cmap['type'] == MAPPING_TABLE:
-                for index in cmap['indexTable']:
-                    file_.write(struct.pack('%sH' % self.order, index))
-                    position += 2
-            elif cmap['type'] == MAPPING_SCAN:
-                keys = list(cmap['entries'].keys())
-                keys.sort()
-                for code in keys:
-                    index = cmap['entries'][code]
-                    file_.write(struct.pack('%s2H' % self.order, ord(code), index))
-                    position += 4
-'''
-          new = '''            if cmap['type'] == MAPPING_DIRECT:
-                file_.write(struct.pack('%sH' % self.order, cmap['indexOffset']))
-                position += 2
-            elif cmap['type'] == MAPPING_TABLE:
-                for index in cmap['indexTable']:
-                    file_.write(struct.pack('%sH' % self.order, index))
-                    position += 2
-            elif cmap['type'] == MAPPING_SCAN:
-                file_.write(struct.pack('%sH' % self.order, len(cmap['entries'])))
-                position += 2
-                keys = list(cmap['entries'].keys())
-                keys.sort()
-                for code in keys:
-                    index = cmap['entries'][code]
-                    file_.write(struct.pack('%s2H' % self.order, ord(code), index))
-                    position += 4
-'''
-          if old not in s:
-              raise SystemExit('Expected CMAP writer block not found')
-          s = s.replace(old, new, 1)
-
-          # 3) Project-proven 3DS RGBA4 byte layout is:
-          # byte0 = RRRRAAAA, byte1 = BBBBGGGG.
-          # Upstream writer used RRRRGGGG / BBBBAAAA although its decoder expects
-          # the project-proven layout. Correct writer so untouched artwork round-trips.
-          old = '''            b1 = (r4 << 4) | g4
-            b2 = (b4 << 4) | a4
-            return [b1, b2]
-'''
-          new = '''            b1 = (r4 << 4) | a4
-            b2 = (b4 << 4) | g4
-            return [b1, b2]
-'''
-          if old not in s:
-              raise SystemExit('Expected RGBA4 writer block not found')
-          s = s.replace(old, new, 1)
-
-          p.write_text(s, encoding='utf-8')
-          PY
-          echo 'PATCHED:'
+          python noto_font_poc/patch_bffnt_tool.py
           sha256sum noto_font_poc/vendor/bffnt.py
 
       - name: Acquire Noto Sans Arabic UI Regular donor
-        shell: bash
         run: |
           mkdir -p noto_font_poc/input
-          curl -L --fail --retry 3 \
-            'https://notofonts.github.io/arabic/fonts/NotoSansArabicUI/hinted/ttf/NotoSansArabicUI-Regular.ttf' \
-            -o noto_font_poc/input/NotoSansArabicUI-Regular.ttf
+          curl -L --fail --retry 3 https://notofonts.github.io/arabic/fonts/NotoSansArabicUI/hinted/ttf/NotoSansArabicUI-Regular.ttf -o noto_font_poc/input/NotoSansArabicUI-Regular.ttf
           stat -c 'DONOR_SIZE=%s' noto_font_poc/input/NotoSansArabicUI-Regular.ttf
           sha256sum noto_font_poc/input/NotoSansArabicUI-Regular.ttf | tee NOTO_SOURCE_SHA256.txt
           test "$(stat -c%s noto_font_poc/input/NotoSansArabicUI-Regular.ttf)" = '274752'
 
       - name: Extract authoritative current RomFS payload
-        shell: bash
         run: |
           test -f trio_installer/input/romfs.rar
           rm -rf noto_font_poc/baseline_romfs
           mkdir -p noto_font_poc/baseline_romfs
           7z x -y -onoto_font_poc/baseline_romfs trio_installer/input/romfs.rar
-          find noto_font_poc/baseline_romfs -type f | sort | head -100
 
       - name: Build font-only PoC and static QA
-        shell: bash
-        run: |
-          python noto_font_poc/build_poc.py | tee NOTO_POC_BUILD_LOG.txt
+        run: python noto_font_poc/build_poc.py | tee NOTO_POC_BUILD_LOG.txt
 
       - name: Package handoff
-        shell: bash
         run: |
           cd noto_font_poc/out
           zip -qr ../../LOC-NOTO-ARABIC-FONT-POC-011.zip LOC-NOTO-ARABIC-FONT-POC-011
