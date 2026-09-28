@@ -57,7 +57,17 @@ jobs:
         run: python noto_font_poc/patch_builder_clear_glyph.py
 
       - name: Build font-only PoC and static QA
-        run: python noto_font_poc/build_poc.py | tee NOTO_POC_BUILD_LOG.txt
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+          python noto_font_poc/build_poc.py | tee NOTO_POC_BUILD_LOG.txt
+          rc=${PIPESTATUS[0]}
+          echo '--- NOTO_FONT_POC_QA.json ---'
+          cat noto_font_poc/out/LOC-NOTO-ARABIC-FONT-POC-011/reports/NOTO_FONT_POC_QA.json || true
+          echo '--- NOTO_FONT_SOURCE_AUDIT.json ---'
+          cat noto_font_poc/out/LOC-NOTO-ARABIC-FONT-POC-011/reports/NOTO_FONT_SOURCE_AUDIT.json || true
+          exit $rc
 
       - name: Package handoff
         run: |
