@@ -39,13 +39,26 @@ jobs:
             arabic-reshaper==3.0.1 \
             python-bidi==0.6.11
 
-      - name: Prepare exact reviewed BFFNT tool
+      - name: Prepare reviewed BFFNT tool with round-trip parser fix
         shell: bash
         run: |
           mkdir -p noto_font_poc/vendor
           curl -L --fail --retry 3 \
             'https://raw.githubusercontent.com/mirusu400/Story-of-seasons-Trio-of-Towns-Fan-Translation/66e01a9f78474bbf0cdb41aeb1605725e68e90ff/tools/bffnt.py' \
             -o noto_font_poc/vendor/bffnt.py
+          echo 'UPSTREAM:'
+          sha256sum noto_font_poc/vendor/bffnt.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('noto_font_poc/vendor/bffnt.py')
+          s = p.read_text(encoding='utf-8')
+          old = "        self.tglp = {\n            'size': section_size,\n            'glyph': {"
+          new = "        self.tglp = {\n            'size': section_size,\n            'maxCharWidth': max_char_width,\n            'glyph': {"
+          if old not in s:
+              raise SystemExit('Expected TGLP parser block not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          echo 'PATCHED:'
           sha256sum noto_font_poc/vendor/bffnt.py
 
       - name: Acquire Noto Sans Arabic UI Regular donor
