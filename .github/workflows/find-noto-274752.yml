@@ -1,0 +1,68 @@
+name: Find exact NotoSansArabicUI 274752
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [trio-installer-build]
+    paths:
+      - '.github/workflows/find-noto-274752.yml'
+
+jobs:
+  find:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Search historical hinted and unhinted font revisions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo='notofonts/noto-fonts'
+          target=274752
+          mkdir -p found
+          : > candidates.tsv
+          for variant in hinted unhinted; do
+            path="$variant/ttf/NotoSansArabicUI/NotoSansArabicUI-Regular.ttf"
+            for page in 1 2 3 4 5; do
+              json=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+                "https://api.github.com/repos/$repo/commits?path=$path&per_page=100&page=$page")
+              count=$(printf '%s' "$json" | jq 'length')
+              [ "$count" -gt 0 ] || break
+              mapfile -t shas < <(printf '%s' "$json" | jq -r '.[].sha')
+              for sha in "${shas[@]}"; do
+                url="https://raw.githubusercontent.com/$repo/$sha/$path"
+                if curl -fsSL --retry 2 "$url" -o candidate.ttf; then
+                  size=$(stat -c%s candidate.ttf)
+                  hash=$(sha256sum candidate.ttf | awk '{print $1}')
+                  printf '%s\t%s\t%s\t%s\n' "$variant" "$sha" "$size" "$hash" | tee -a candidates.tsv
+                  if [ "$size" = "$target" ]; then
+                    cp candidate.ttf "found/NotoSansArabicUI-Regular_${variant}_${sha}.ttf"
+                    printf '%s\t%s\t%s\t%s\n' "$variant" "$sha" "$size" "$hash" > found/MATCH.tsv
+                    echo "MATCH variant=$variant sha=$sha size=$size sha256=$hash"
+                    exit 0
+                  fi
+                fi
+              done
+            done
+          done
+          echo 'No exact 274752-byte historical font found.'
+          exit 2
+
+      - name: Upload exact match
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noto-274752-match
+          path: found/
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noto-history-diagnostics
+          path: candidates.tsv
+          compression-level: 0
+          retention-days: 7
