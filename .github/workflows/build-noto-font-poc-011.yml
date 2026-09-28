@@ -53,6 +53,9 @@ jobs:
           mkdir -p noto_font_poc/baseline_romfs
           7z x -y -onoto_font_poc/baseline_romfs trio_installer/input/romfs.rar
 
+      - name: Apply clean glyph-slot replacement fix
+        run: python noto_font_poc/patch_builder_clear_glyph.py
+
       - name: Build font-only PoC and static QA
         run: python noto_font_poc/build_poc.py | tee NOTO_POC_BUILD_LOG.txt
 
