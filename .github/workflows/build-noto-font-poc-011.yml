@@ -53,7 +53,7 @@ jobs:
         run: |
           mkdir -p noto_font_poc/input
           curl -L --fail --retry 3 \
-            'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/unhinted/ttf/NotoSansArabicUI/NotoSansArabicUI-Regular.ttf' \
+            'https://notofonts.github.io/arabic/fonts/NotoSansArabicUI/hinted/ttf/NotoSansArabicUI-Regular.ttf' \
             -o noto_font_poc/input/NotoSansArabicUI-Regular.ttf
           stat -c 'DONOR_SIZE=%s' noto_font_poc/input/NotoSansArabicUI-Regular.ttf
           sha256sum noto_font_poc/input/NotoSansArabicUI-Regular.ttf | tee NOTO_SOURCE_SHA256.txt
