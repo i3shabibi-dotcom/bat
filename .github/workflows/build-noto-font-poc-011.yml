@@ -39,7 +39,7 @@ jobs:
             arabic-reshaper==3.0.1 \
             python-bidi==0.6.11
 
-      - name: Prepare reviewed BFFNT tool with round-trip parser fix
+      - name: Prepare reviewed BFFNT tool with verified round-trip fixes
         shell: bash
         run: |
           mkdir -p noto_font_poc/vendor
@@ -52,11 +52,74 @@ jobs:
           from pathlib import Path
           p = Path('noto_font_poc/vendor/bffnt.py')
           s = p.read_text(encoding='utf-8')
+
+          # 1) _parse_tglp_header parsed max_char_width but did not retain it,
+          # while save() requires tglp['maxCharWidth'].
           old = "        self.tglp = {\n            'size': section_size,\n            'glyph': {"
           new = "        self.tglp = {\n            'size': section_size,\n            'maxCharWidth': max_char_width,\n            'glyph': {"
           if old not in s:
               raise SystemExit('Expected TGLP parser block not found')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          s = s.replace(old, new, 1)
+
+          # 2) save() incorrectly wrote a scan-entry count before EVERY CMAP.
+          # Parser proves DIRECT data = uint16 indexOffset, TABLE data = uint16 table[],
+          # SCAN data = uint16 count + (uint16 code,uint16 index) pairs.
+          old = '''            file_.write(struct.pack('%sH' % self.order, len(cmap['entries'])))
+            position += 2
+
+            if cmap['type'] == MAPPING_DIRECT:
+                file_.write(struct.pack('%sH' % self.order, cmap['indexOffset']))
+                position += 2
+            elif cmap['type'] == MAPPING_TABLE:
+                for index in cmap['indexTable']:
+                    file_.write(struct.pack('%sH' % self.order, index))
+                    position += 2
+            elif cmap['type'] == MAPPING_SCAN:
+                keys = list(cmap['entries'].keys())
+                keys.sort()
+                for code in keys:
+                    index = cmap['entries'][code]
+                    file_.write(struct.pack('%s2H' % self.order, ord(code), index))
+                    position += 4
+'''
+          new = '''            if cmap['type'] == MAPPING_DIRECT:
+                file_.write(struct.pack('%sH' % self.order, cmap['indexOffset']))
+                position += 2
+            elif cmap['type'] == MAPPING_TABLE:
+                for index in cmap['indexTable']:
+                    file_.write(struct.pack('%sH' % self.order, index))
+                    position += 2
+            elif cmap['type'] == MAPPING_SCAN:
+                file_.write(struct.pack('%sH' % self.order, len(cmap['entries'])))
+                position += 2
+                keys = list(cmap['entries'].keys())
+                keys.sort()
+                for code in keys:
+                    index = cmap['entries'][code]
+                    file_.write(struct.pack('%s2H' % self.order, ord(code), index))
+                    position += 4
+'''
+          if old not in s:
+              raise SystemExit('Expected CMAP writer block not found')
+          s = s.replace(old, new, 1)
+
+          # 3) Project-proven 3DS RGBA4 byte layout is:
+          # byte0 = RRRRAAAA, byte1 = BBBBGGGG.
+          # Upstream writer used RRRRGGGG / BBBBAAAA although its decoder expects
+          # the project-proven layout. Correct writer so untouched artwork round-trips.
+          old = '''            b1 = (r4 << 4) | g4
+            b2 = (b4 << 4) | a4
+            return [b1, b2]
+'''
+          new = '''            b1 = (r4 << 4) | a4
+            b2 = (b4 << 4) | g4
+            return [b1, b2]
+'''
+          if old not in s:
+              raise SystemExit('Expected RGBA4 writer block not found')
+          s = s.replace(old, new, 1)
+
+          p.write_text(s, encoding='utf-8')
           PY
           echo 'PATCHED:'
           sha256sum noto_font_poc/vendor/bffnt.py
