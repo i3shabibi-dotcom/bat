@@ -1,0 +1,95 @@
+name: Build Noto Arabic Font PoC 011
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [trio-installer-build]
+    paths:
+      - 'noto_font_poc/**'
+      - '.github/workflows/build-noto-font-poc-011.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full libfreetype6
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            Pillow==11.3.0 \
+            pypng==0.20220715.0 \
+            fonttools==4.65.0 \
+            numpy==2.5.3 \
+            uharfbuzz==0.52.0 \
+            freetype-py==2.5.1 \
+            arabic-reshaper==3.0.1 \
+            python-bidi==0.6.11
+
+      - name: Prepare exact reviewed BFFNT tool
+        shell: bash
+        run: |
+          mkdir -p noto_font_poc/vendor
+          curl -L --fail --retry 3 \
+            'https://raw.githubusercontent.com/mirusu400/Story-of-seasons-Trio-of-Towns-Fan-Translation/66e01a9f78474bbf0cdb41aeb1605725e68e90ff/tools/bffnt.py' \
+            -o noto_font_poc/vendor/bffnt.py
+          sha256sum noto_font_poc/vendor/bffnt.py
+
+      - name: Acquire Noto Sans Arabic UI Regular donor
+        shell: bash
+        run: |
+          mkdir -p noto_font_poc/input
+          curl -L --fail --retry 3 \
+            'https://notofonts.github.io/arabic/fonts/NotoSansArabicUI/full/ttf/NotoSansArabicUI-Regular.ttf' \
+            -o noto_font_poc/input/NotoSansArabicUI-Regular.ttf
+          test "$(stat -c%s noto_font_poc/input/NotoSansArabicUI-Regular.ttf)" = '274752'
+          sha256sum noto_font_poc/input/NotoSansArabicUI-Regular.ttf | tee NOTO_SOURCE_SHA256.txt
+
+      - name: Extract authoritative current RomFS payload
+        shell: bash
+        run: |
+          test -f trio_installer/input/romfs.rar
+          rm -rf noto_font_poc/baseline_romfs
+          mkdir -p noto_font_poc/baseline_romfs
+          7z x -y -onoto_font_poc/baseline_romfs trio_installer/input/romfs.rar
+          find noto_font_poc/baseline_romfs -type f | sort | head -100
+
+      - name: Build font-only PoC and static QA
+        shell: bash
+        run: |
+          python noto_font_poc/build_poc.py | tee NOTO_POC_BUILD_LOG.txt
+
+      - name: Package handoff
+        shell: bash
+        run: |
+          cd noto_font_poc/out
+          zip -qr ../../LOC-NOTO-ARABIC-FONT-POC-011.zip LOC-NOTO-ARABIC-FONT-POC-011
+          cd ../..
+          sha256sum LOC-NOTO-ARABIC-FONT-POC-011.zip | tee LOC-NOTO-ARABIC-FONT-POC-011_SHA256.txt
+          find noto_font_poc/out/LOC-NOTO-ARABIC-FONT-POC-011 -type f | sort
+
+      - name: Upload PoC handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: LOC-NOTO-ARABIC-FONT-POC-011
+          path: |
+            LOC-NOTO-ARABIC-FONT-POC-011.zip
+            LOC-NOTO-ARABIC-FONT-POC-011_SHA256.txt
+            NOTO_SOURCE_SHA256.txt
+            NOTO_POC_BUILD_LOG.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
