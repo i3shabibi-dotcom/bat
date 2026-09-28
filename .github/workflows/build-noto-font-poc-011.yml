@@ -53,10 +53,11 @@ jobs:
         run: |
           mkdir -p noto_font_poc/input
           curl -L --fail --retry 3 \
-            'https://notofonts.github.io/arabic/fonts/NotoSansArabicUI/full/ttf/NotoSansArabicUI-Regular.ttf' \
+            'https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/unhinted/ttf/NotoSansArabicUI/NotoSansArabicUI-Regular.ttf' \
             -o noto_font_poc/input/NotoSansArabicUI-Regular.ttf
-          test "$(stat -c%s noto_font_poc/input/NotoSansArabicUI-Regular.ttf)" = '274752'
+          stat -c 'DONOR_SIZE=%s' noto_font_poc/input/NotoSansArabicUI-Regular.ttf
           sha256sum noto_font_poc/input/NotoSansArabicUI-Regular.ttf | tee NOTO_SOURCE_SHA256.txt
+          test "$(stat -c%s noto_font_poc/input/NotoSansArabicUI-Regular.ttf)" = '274752'
 
       - name: Extract authoritative current RomFS payload
         shell: bash
