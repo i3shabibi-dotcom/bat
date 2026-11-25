@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../node_modules/@fontsource/cairo/400.css">
+<link rel="stylesheet" href="../node_modules/@fontsource/cairo/600.css">
+<link rel="stylesheet" href="../node_modules/@fontsource/cairo/700.css">
+<link rel="stylesheet" href="../node_modules/@fontsource/cairo/900.css">
+<style>
+:root{--bg:#05060c;--leak:#ffb020;--official:#22d38a;--concept:#a77bff;--report:#3fa9ff;--warn:#ff5468;--txt:#f4f6ff;--mute:#9aa3c0}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--bg);font-family:'Cairo',sans-serif;color:var(--txt)}
+#stage{position:absolute;inset:0;overflow:hidden}
+.abs{position:absolute}
+.layer{position:absolute;inset:0}
+.bgimg{position:absolute;inset:-60px;background-size:cover;background-position:center}
+#grid{position:absolute;inset:0;opacity:.18;background-image:linear-gradient(rgba(120,140,255,.35) 1px,transparent 1px),linear-gradient(90deg,rgba(120,140,255,.35) 1px,transparent 1px);background-size:90px 90px;mask-image:radial-gradient(ellipse at 50% 45%,#000 30%,transparent 75%)}
+#vign{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,transparent 40%,rgba(0,0,0,.75) 100%)}
+#progress{position:absolute;top:0;right:0;height:8px;background:linear-gradient(90deg,var(--concept),var(--report));z-index:50}
+.scene{position:absolute;inset:0;opacity:0}
+.badge{position:absolute;top:150px;right:70px;display:flex;align-items:center;gap:14px;padding:10px 30px 12px;border-radius:60px;font-weight:900;font-size:44px;line-height:1.2;backdrop-filter:blur(8px)}
+.badge .dot{width:20px;height:20px;border-radius:50%}
+.src{position:absolute;top:248px;right:76px;left:76px;font-size:32px;font-weight:600;color:var(--mute);line-height:1.35}
+.card{position:absolute;left:50px;width:980px;height:551px;top:360px;border-radius:40px;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.7),0 0 0 2px rgba(255,255,255,.12)}
+.card img{position:absolute;width:100%;height:100%;object-fit:cover}
+.aitag{position:absolute;bottom:18px;left:18px;padding:6px 18px 8px;border-radius:30px;background:rgba(10,6,25,.72);border:2px solid var(--concept);color:#e6dcff;font-size:26px;font-weight:700}
+.sheen{position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.28) 50%,transparent 65%);mix-blend-mode:screen}
+.h1{position:absolute;left:60px;right:60px;text-align:center;font-weight:900}
+.panel{position:absolute;left:60px;right:60px;top:960px;height:400px}
+#caps{position:absolute;left:60px;right:60px;top:1420px;text-align:center;font-weight:800;font-size:54px;line-height:1.45;z-index:40;text-shadow:0 4px 18px rgba(0,0,0,.95),0 0 4px #000}
+#caps span{display:inline-block;margin:0 7px;transition:none}
+.chip{display:flex;align-items:center;gap:22px;padding:18px 30px;border-radius:28px;background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.12);font-size:44px;font-weight:700;margin-bottom:20px}
+.chip .ic{flex:0 0 58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:900}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:60;pointer-events:none}
+.ltr{direction:ltr;unicode-bidi:isolate;display:inline-block}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="layer" id="bgwrap"></div>
+  <div id="grid"></div>
+  <div id="vign"></div>
+  <div id="progress"></div>
+
+  <!-- 1 HOOK -->
+  <div class="scene" id="s-hook">
+    <img class="abs" id="hookimg" src="img/hero_tall.jpg" style="inset:0;width:1080px;height:1920px;object-fit:cover">
+    <div class="layer" style="background:linear-gradient(180deg,rgba(5,6,12,.55) 0%,transparent 30%,transparent 55%,rgba(5,6,12,.9) 80%)"></div>
+    <div class="badge" style="background:rgba(167,123,255,.22);border:3px solid var(--concept)"><span class="dot" style="background:var(--concept)"></span>تصوّر تخيلي</div>
+    <div class="h1" id="hookT1" style="top:1010px;font-size:170px;letter-spacing:-2px;direction:ltr">iPhone 20</div>
+    <div class="h1" id="hookT2" style="top:1220px;font-size:68px;color:#d9cfff">كله زجاج؟</div>
+  </div>
+
+  <!-- 2 OFFICIAL -->
+  <div class="scene" id="s-official">
+    <div class="badge" style="background:rgba(34,211,138,.18);border:3px solid var(--official)"><span class="dot" style="background:var(--official)"></span>معلومة رسمية</div>
+    <div class="src">أول آيفون أُعلن في يناير 2007</div>
+    <div class="abs" style="top:430px;left:0;right:0;text-align:center">
+      <div id="cnt" style="font-size:300px;font-weight:900;line-height:1;background:linear-gradient(180deg,#fff,#7f8cff);-webkit-background-clip:text;color:transparent">20</div>
+      <div style="font-size:64px;font-weight:800;margin-top:-10px">سنة آيفون</div>
+    </div>
+    <div class="abs" style="top:900px;left:110px;right:110px;height:120px">
+      <div class="abs" style="top:56px;left:0;right:0;height:6px;background:rgba(255,255,255,.12);border-radius:4px"></div>
+      <div class="abs" id="tlbar" style="top:56px;right:0;height:6px;width:0;background:linear-gradient(270deg,var(--official),var(--report));border-radius:4px"></div>
+      <div class="abs" style="right:-20px;top:36px;width:46px;height:46px;border-radius:50%;background:var(--official)"></div>
+      <div class="abs" id="tldot2" style="left:-20px;top:36px;width:46px;height:46px;border-radius:50%;background:var(--report);opacity:0"></div>
+      <div class="abs" style="right:-30px;top:-14px;font-size:42px;font-weight:800">2007</div>
+      <div class="abs" id="tly2" style="left:-30px;top:-14px;font-size:42px;font-weight:800;opacity:0">2027</div>
+    </div>
+    <div class="panel" id="offp" style="top:1100px;height:240px">
+      <div class="chip" style="border-color:rgba(255,84,104,.5);background:rgba(255,84,104,.08)"><span class="ic" style="background:rgba(255,84,104,.2);color:var(--warn)">!</span><span>أبل لم تعلن عن <span class="ltr">iPhone 20</span> رسميًا</span></div>
+      <div class="chip"><span class="ic" style="background:rgba(255,255,255,.1)">?</span><span>ولم تؤكّد حتى الاسم</span></div>
+    </div>
+  </div>
+
+  <!-- 3 GURMAN -->
+  <div class="scene" id="s-gurman">
+    <div class="badge" style="background:rgba(63,169,255,.18);border:3px solid var(--report)"><span class="dot" style="background:var(--report)"></span>تقرير صحفي · غير مؤكد</div>
+    <div class="src">مارك غورمان · Bloomberg · نشرة Power On · مايو 2025</div>
+    <div class="card" id="gcard"><img src="img/edge.jpg"><div class="sheen"></div><div class="aitag">تصوّر تخيلي بالذكاء الاصطناعي</div></div>
+    <div class="panel" id="gpanel">
+      <div class="chip"><span class="ic" style="background:rgba(63,169,255,.2);color:var(--report)">1</span>أغلبه زجاج</div>
+      <div class="chip"><span class="ic" style="background:rgba(63,169,255,.2);color:var(--report)">2</span>تصميم منحني</div>
+      <div class="chip"><span class="ic" style="background:rgba(63,169,255,.2);color:var(--report)">3</span>بدون فتحات في الشاشة</div>
+    </div>
+  </div>
+
+  <!-- 4 ICE UNIVERSE -->
+  <div class="scene" id="s-ice">
+    <div class="badge" style="background:rgba(255,176,32,.16);border:3px solid var(--leak)"><span class="dot" style="background:var(--leak)"></span>تسريب · غير مؤكد</div>
+    <div class="src">Ice Universe · Weibo · 18 نوفمبر 2026 · سجلّه مع أبل متفاوت</div>
+    <div class="card" id="icard"><img src="img/four.jpg"><div class="sheen"></div><div class="aitag">تصوّر تخيلي بالذكاء الاصطناعي</div></div>
+    <div class="panel" id="ipanel" style="top:950px">
+      <svg width="960" height="300" viewBox="0 0 960 300" id="isvg">
+        <g id="ph0" transform="translate(70,30)"><rect width="150" height="250" rx="22" fill="none" stroke="#fff" stroke-width="7"/></g>
+        <g id="ph1" transform="translate(290,30)"><rect width="150" height="250" rx="22" fill="none" stroke="#fff" stroke-width="7"/></g>
+        <g id="ph2" transform="translate(520,30)"><rect width="150" height="250" rx="22" fill="rgba(255,176,32,.12)" stroke="#ffb020" stroke-width="7"/><path d="M18 10 Q75 -8 132 10 M18 240 Q75 258 132 240 M8 22 Q-8 125 8 228 M142 22 Q158 125 142 228" fill="none" stroke="#ffd27a" stroke-width="5"/></g>
+        <g id="ph3" transform="translate(740,30)"><rect width="150" height="250" rx="22" fill="rgba(255,176,32,.12)" stroke="#ffb020" stroke-width="7"/><path d="M18 10 Q75 -8 132 10 M18 240 Q75 258 132 240 M8 22 Q-8 125 8 228 M142 22 Q158 125 142 228" fill="none" stroke="#ffd27a" stroke-width="5"/></g>
+      </svg>
+      <div class="abs" id="ilab" style="top:300px;left:0;right:0;display:flex;justify-content:space-around;font-size:40px;font-weight:800">
+        <span>2 منحنية من 4 جهات</span><span style="color:#cfd5ea">2 بزجاج مسطّح</span>
+      </div>
+      <div class="abs" id="inote" style="top:370px;left:0;right:0;text-align:center;font-size:34px;color:var(--leak);font-weight:700">الانحناء أخفّ من النماذج الأولى</div>
+    </div>
+  </div>
+
+  <!-- 5 DCS -->
+  <div class="scene" id="s-dcs">
+    <div class="badge" style="background:rgba(255,176,32,.16);border:3px solid var(--leak)"><span class="dot" style="background:var(--leak)"></span>تسريب · غير مؤكد</div>
+    <div class="src">Digital Chat Station · Weibo</div>
+    <div class="card" id="dcard"><img src="img/island.jpg"><div class="sheen"></div><div class="aitag">تصوّر تخيلي بالذكاء الاصطناعي</div></div>
+    <div class="panel" id="dpanel">
+      <div id="warn" class="chip" style="border-color:rgba(255,84,104,.6);background:rgba(255,84,104,.1);font-size:38px"><span class="ic" style="background:rgba(255,84,104,.25);color:var(--warn)">!</span><span>يناقض غورمان: <span class="ltr">Dynamic Island</span> باقية</span></div>
+      <div style="display:flex;align-items:center;gap:20px;margin-top:26px;font-size:40px;font-weight:800"><span class="ltr" style="width:230px">Pro</span><div style="flex:1;height:50px;background:rgba(255,255,255,.07);border-radius:25px;overflow:hidden"><div id="b1" style="height:100%;width:0;background:linear-gradient(270deg,var(--leak),#ff7a2f);border-radius:25px"></div></div><span id="n1" class="ltr" style="width:150px;text-align:left">0.00″</span></div>
+      <div style="display:flex;align-items:center;gap:20px;margin-top:22px;font-size:40px;font-weight:800"><span class="ltr" style="width:230px">Pro Max</span><div style="flex:1;height:50px;background:rgba(255,255,255,.07);border-radius:25px;overflow:hidden"><div id="b2" style="height:100%;width:0;background:linear-gradient(270deg,var(--leak),#ff7a2f);border-radius:25px"></div></div><span id="n2" class="ltr" style="width:150px;text-align:left">0.00″</span></div>
+    </div>
+  </div>
+
+  <!-- 6 TITANIUM + OLED -->
+  <div class="scene" id="s-tioled">
+    <div id="tA">
+      <div class="badge" style="background:rgba(255,176,32,.16);border:3px solid var(--leak)"><span class="dot" style="background:var(--leak)"></span>تسريب · غير مؤكد</div>
+      <div class="src">Fixed Focus Digital · Weibo · نوفمبر 2026</div>
+      <div class="card" id="tcard"><img src="img/titanium.jpg"><div class="sheen"></div><div class="aitag">تصوّر تخيلي بالذكاء الاصطناعي</div></div>
+      <div class="panel" id="tpanel">
+        <div class="chip"><span class="ic" style="background:rgba(255,176,32,.2);color:var(--leak)">Ti</span>إطار تيتانيوم</div>
+        <div class="chip" style="font-size:38px"><span class="ic" style="background:rgba(255,255,255,.1)">~</span>في نماذج ما قبل الإنتاج · قابل للتغيير</div>
+      </div>
+    </div>
+    <div id="tB" style="opacity:0">
+      <div class="badge" style="background:rgba(63,169,255,.18);border:3px solid var(--report)"><span class="dot" style="background:var(--report)"></span>تقارير سلاسل التوريد</div>
+      <div class="src">ETNews · MacRumors</div>
+      <div class="card" id="ocard"><img src="img/oled.jpg"><div class="sheen"></div><div class="aitag">تصوّر تخيلي بالذكاء الاصطناعي</div></div>
+      <div class="panel" id="opanel">
+        <div class="chip"><span class="ic" style="background:rgba(63,169,255,.2);color:var(--report);font-size:26px">S</span>شاشة <span class="ltr">OLED</span> منحنية من سامسونج</div>
+        <div class="chip"><span class="ic" style="background:rgba(63,169,255,.2);color:var(--report)">+</span>أنحف · وأسطع</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7 SUMMARY -->
+  <div class="scene" id="s-summary">
+    <div class="badge" style="background:rgba(255,255,255,.1);border:3px solid #fff"><span class="dot" style="background:#fff"></span>الخلاصة</div>
+    <div class="panel" id="sumpanel" style="top:420px;height:900px">
+      <div class="chip" style="border-color:rgba(34,211,138,.5);background:rgba(34,211,138,.08);flex-direction:column;align-items:flex-start;gap:6px">
+        <div style="color:var(--official);font-size:40px">تميل له أغلب التسريبات</div>
+        <div style="font-size:52px">زجاج أكثر + انحناء</div>
+      </div>
+      <div class="chip" style="border-color:rgba(255,84,104,.5);background:rgba(255,84,104,.08);flex-direction:column;align-items:flex-start;gap:6px">
+        <div style="color:var(--warn);font-size:40px">متضارب</div>
+        <div style="font-size:46px">الفتحات · شكل الانحناء · المقاسات</div>
+      </div>
+      <div class="chip" style="border-color:rgba(167,123,255,.6);background:rgba(167,123,255,.1);font-size:40px"><span class="ic" style="background:rgba(167,123,255,.25);color:var(--concept)">AI</span>كل الصور تصوّرات تخيلية · ليست رسمية</div>
+    </div>
+  </div>
+
+  <!-- 8 CTA -->
+  <div class="scene" id="s-cta">
+    <div class="h1" style="top:470px;font-size:80px">وإنتو؟</div>
+    <div class="abs" style="top:660px;left:90px;right:90px;display:flex;gap:40px">
+      <div id="ctaA" style="flex:1;padding:50px 0;text-align:center;border-radius:40px;border:4px solid var(--leak);background:rgba(255,176,32,.12);font-size:72px;font-weight:900">منحني</div>
+      <div id="ctaB" style="flex:1;padding:50px 0;text-align:center;border-radius:40px;border:4px solid #cfd5ea;background:rgba(255,255,255,.06);font-size:72px;font-weight:900">مسطّح</div>
+    </div>
+    <div class="h1" id="ctaC" style="top:960px;font-size:50px;color:var(--mute)">اكتبوا لي في التعليقات</div>
+  </div>
+
+  <div id="caps"></div>
+  <div class="flash" id="flash"></div>
+</div>
+<script>
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const eo=x=>1-Math.pow(1-clamp(x),3);            // easeOutCubic
+const eio=x=>{x=clamp(x);return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2};
+const back=x=>{x=clamp(x);const c=1.70158,c3=c+1;return 1+c3*Math.pow(x-1,3)+c*Math.pow(x-1,2)};
+const $=id=>document.getElementById(id);
+const BG={hook:'hero_bg',official:'hero_bg',gurman:'edge_bg',ice:'four_bg',dcs:'island_bg',tioled:'titanium_bg',summary:'hero_bg',cta:'oled_bg'};
+let TL=null;
+// background layers
+function initBG(){const w=$('bgwrap');new Set(Object.values(BG)).forEach(n=>{const d=document.createElement('div');d.className='bgimg';d.id='bg_'+n;d.style.backgroundImage=`url(img/${n}.jpg)`;d.style.opacity=0;w.appendChild(d)})}
+function stagger(el,lt,delay=0,step=.12){[...el.children].forEach((c,i)=>{const p=eo((lt-delay-i*step)/.45);c.style.opacity=p;c.style.transform=`translateX(${(1-p)*-80}px)`})}
+function cardIn(el,lt,d){const p=eo(lt/.5);const z=1+0.08*clamp(lt/d);el.style.opacity=p;el.style.transform=`translateY(${(1-p)*80}px) scale(${.92+.08*p})`;const img=el.querySelector('img');img.style.transform=`scale(${1.06+0.1*clamp(lt/d)}) translateX(${-20*clamp(lt/d)}px)`;const sh=el.querySelector('.sheen');if(sh)sh.style.transform=`translateX(${-1200+2400*clamp((lt-.3)/1.2)}px)`}
+function badgeIn(sc,lt){sc.querySelectorAll('.badge,.src').forEach((b,i)=>{const p=back((lt-i*.12)/.45);b.style.opacity=clamp((lt-i*.12)/.25);b.style.transform=`translateY(${(1-p)*-40}px)`})}
+const SC={
+ hook(lt,d){const z=1.18-0.14*eo(lt/2.2);$('hookimg').style.transform=`scale(${z}) rotate(${-2+2*eo(lt/2.2)}deg)`;
+   const p1=back((lt-.15)/.5),p2=eo((lt-.55)/.5);$('hookT1').style.opacity=clamp((lt-.15)/.2);$('hookT1').style.transform=`scale(${1.6-.6*p1})`;$('hookT1').style.letterSpacing=`${30-32*eo((lt-.15)/.8)}px`;
+   $('hookT2').style.opacity=p2;$('hookT2').style.transform=`translateY(${(1-p2)*40}px)`;badgeIn($('s-hook'),lt-.9)},
+ official(lt,d){badgeIn($('s-official'),lt);const p=eio((lt-.3)/2.2);$('cnt').textContent=Math.round(20*p);$('tlbar').style.width=(100*p)+'%';$('tldot2').style.opacity=clamp((p-.95)*20);$('tly2').style.opacity=clamp((p-.9)*10);stagger($('offp'),lt,d*.55)},
+ gurman(lt,d){badgeIn($('s-gurman'),lt);cardIn($('gcard'),lt-.1,d);stagger($('gpanel'),lt,d*.35,d*.16)},
+ ice(lt,d){badgeIn($('s-ice'),lt);cardIn($('icard'),lt-.1,d);
+   for(let i=0;i<4;i++){const p=back((lt-d*.3-i*.18)/.4);const g=$('ph'+i);g.style.opacity=clamp((lt-d*.3-i*.18)/.2);g.style.transformBox='fill-box';g.style.transformOrigin='center';g.style.transform=`scale(${.4+.6*p})`}
+   $('ilab').style.opacity=clamp((lt-d*.5)/.4);$('inote').style.opacity=clamp((lt-d*.78)/.4)},
+ dcs(lt,d){badgeIn($('s-dcs'),lt);cardIn($('dcard'),lt-.1,d);const w=$('warn');const pw=back((lt-d*.18)/.45);w.style.opacity=clamp((lt-d*.18)/.25);w.style.transform=`scale(${.85+.15*pw})`;
+   const p1=eio((lt-d*.5)/1.1),p2=eio((lt-d*.68)/1.1);$('b1').style.width=(p1*6.41/6.96*100)+'%';$('b2').style.width=(p2*100)+'%';$('n1').textContent=(6.41*p1).toFixed(2)+'″';$('n2').textContent=(6.96*p2).toFixed(2)+'″'},
+ tioled(lt,d,sc){const s=sc.splitT;const a=$('tA'),b=$('tB');const x=eio((lt-s+.15)/.5);a.style.opacity=1-x;b.style.opacity=x;a.style.transform=`translateX(${x*300}px)`;b.style.transform=`translateX(${(1-x)*-300}px)`;
+   badgeIn(a,lt);cardIn($('tcard'),lt-.1,s);stagger($('tpanel'),lt,.6,.5);
+   const lb=lt-s+.15;badgeIn(b,lb);cardIn($('ocard'),lb,d-s);stagger($('opanel'),lb,.5,(d-s)*.3)},
+ summary(lt,d){badgeIn($('s-summary'),lt);stagger($('sumpanel'),lt,.4,d*.25)},
+ cta(lt,d){const a=back(lt/.5),b=back((lt-.25)/.5);$('ctaA').style.transform=`scale(${a}) rotate(${-3*(1-eo(lt))}deg)`;$('ctaB').style.transform=`scale(${b})`;$('ctaA').style.opacity=clamp(lt/.2);$('ctaB').style.opacity=clamp((lt-.25)/.2);
+   const pulse=1+.04*Math.sin(lt*6);$('ctaC').style.transform=`scale(${pulse})`;$('ctaC').style.opacity=clamp((lt-.8)/.4)}
+};
+function renderCaps(t){const s=TL.scenes.find(s=>t>=s.start&&t<s.end+0.05)||TL.scenes[TL.scenes.length-1];const el=$('caps');
+  const chunks=s.chunks;let k=chunks.findIndex(c=>t>=c.t0&&t<c.t1);if(k<0)k=t<chunks[0].t0?0:chunks.length-1;const c=chunks[k];
+  if(el.dataset.key!==s.id+k){el.dataset.key=s.id+k;el.innerHTML=c.words.map(w=>`<span>${w.w}</span>`).join('')}
+  [...el.children].forEach((sp,i)=>{const w=c.words[i];const on=t>=w.t;const p=eo((t-w.t)/.18);sp.style.color=on?'#fff':'rgba(255,255,255,.55)';sp.style.transform=`translateY(${on?(1-p)*10:0}px) scale(${on?1+.08*(1-p):1})`;if(on&&t-w.t<.25)sp.style.color='#ffd27a'});
+  const ci=eo((t-c.t0)/.15);el.style.opacity=ci}
+window.renderAt=function(t){
+  $('progress').style.width=(100*t/TL.total)+'%';
+  const T=.35; let fl=0;
+  TL.scenes.forEach((s,i)=>{const el=$('s-'+s.id);const lt=t-s.start,d=s.end-s.start;
+    let o=0; if(t>=s.start-T&&t<s.end+T){o=Math.min(eo((t-s.start+T)/T),1-eo((t-s.end)/T)); if(i==0)o=t<s.end?1:1-eo((t-s.end)/T); if(i==TL.scenes.length-1&&t>=s.end)o=1}
+    el.style.opacity=o; if(o>0){SC[s.id](Math.max(0,lt),d,s)}
+    // bg
+    const bg=$('bg_'+BG[s.id]);
+    if(Math.abs(lt)<.12&&i>0)fl=Math.max(fl,.35*(1-Math.abs(lt)/.12));
+  });
+  // background crossfade
+  const cur=TL.scenes.find(s=>t<s.end)||TL.scenes[TL.scenes.length-1];
+  document.querySelectorAll('.bgimg').forEach(b=>{const on=b.id==='bg_'+BG[cur.id];const v=+(b.dataset.v||0);const nv=on?1:0;b.style.opacity=nv;b.style.transform=`scale(${1.05+.03*Math.sin(t*.4)}) translate(${10*Math.sin(t*.3)}px,${12*Math.cos(t*.25)}px)`});
+  $('grid').style.backgroundPosition=`0 ${t*30}px`;
+  $('flash').style.opacity=fl; renderCaps(t);
+};
+window.setTL=function(tl){TL=tl;initBG()};
+</script>
+</body>
+</html>

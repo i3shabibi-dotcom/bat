@@ -1,0 +1,5 @@
+node_modules/
+stills/
+out/video_silent.mp4
+out/sfx.wav
+package-lock.json
